@@ -8,6 +8,19 @@
 
 
 
+static int next_not( char * json, char c ) {
+	++json;
+	while( isspace( *json ) ) ++json;
+	return ( *json != c );
+}
+
+enum type {
+	TXT,
+	BOOL,
+	NUM,
+	NLL,
+	PUNC
+};
 struct beautify_arg {
 	int c;
 	int c_p;
@@ -16,27 +29,17 @@ struct beautify_arg {
 	int c_b;
 	int c_r;
 	int c_n;
-	int c_e;
 	int indent;
 	int in_dd;
-	int is_txt;
+	enum type t;
+	int is_val;
 };
-static int beautify( struct beautify_arg * b, char * json, FILE * file, int (*fprintf_func)( FILE *, const char *, ... ) ) {
+static int beautify( struct beautify_arg * b, char * json, FILE * file, int (*fputc_func)( int, FILE * ), int (*fprintf_func)( FILE *, const char *, ... ) ) {
 
-	int i;
 	int j;
-#define P_BUF_SIZE 128
-	char buf[ P_BUF_SIZE ];
 
 
-#define p( some_char ) \
-	{ \
-		buf[ i++ ] = some_char; \
-		if( i == P_BUF_SIZE ) { \
-			fprintf_func( file, "%.*s", i, buf ); \
-			i = 0; \
-		} \
-	}
+#define p( some_char ) fputc_func( some_char, file )
 
 #define p_new_line() \
 	{ \
@@ -44,14 +47,40 @@ static int beautify( struct beautify_arg * b, char * json, FILE * file, int (*fp
 		for( j = 0; j < b->indent; ++j ) p( ' ' ); \
 	}
 
-	i = 0;
+#define p_col_change( col ) if( b->c ) fprintf_func( file, "\033[0;38;5;%dm", col );
+
 	while( *json ) {
-		if( b->is_txt ) {
-			if( *json == '"' ) b->is_txt = 0;
+		if( b->t == TXT ) {
 			p( *json );
+			if( *json == '"' ) {
+				b->t = PUNC;
+				p_col_change( b->c_p );
+			}
 		} else {
 			if( ! isspace( *json ) ) {
-				if( *json == ']' || *json == '[' || *json == '{' || *json == '}' || *json == ',' ) {
+				if( *json == ':' ) {
+					p( *json );
+					p( ' ' );
+					b->is_val = 1;
+				} else if( *json == '"' ) {
+					p_col_change( b->is_val ? b->c_l : b->c_t );
+					b->t = TXT;
+					p( *json );
+				} else if( ( isdigit( *json ) || *json == '.' || *json == '-' ) && b->t != NUM ) {
+					b->t = NUM;
+					p_col_change( b->c_r );
+					p( *json );
+				} else if( *json == 'f' || *json == 't' ) {
+					b->t = BOOL;
+					p_col_change( b->c_b );
+					p( *json );
+				} else if( *json == 'n' ) {
+					b->t = NLL;
+					p_col_change( b->c_n );
+					p( *json );
+				} else if( *json == ']' || *json == '[' || *json == '{' || *json == '}' || *json == ',' ) {
+					b->is_val = 0;
+					if( b->t != PUNC ) p_col_change( b->c_p );
 					if( *json == ']' || *json == '}' ) {
 						b->indent -= b->in_dd;
 						check_msg( b->indent >= 0, final_cleanup, "Malformed json." );
@@ -60,15 +89,13 @@ static int beautify( struct beautify_arg * b, char * json, FILE * file, int (*fp
 					if( *json == '[' || *json == '{' ) b->indent += b->in_dd;
 					p( *json );
 					if(
-							*( json + 1 ) != ']'
-							&& *( json + 1 ) != '}'
-							&& *( json + 1 ) != ','
-							&& ( *json != ',' || (
-									*( json + 1 ) != '{'
-									&& *( json + 1 ) != '['
-									)
-							   )
+							next_not( json, ']' )
+							&& next_not( json, '}' )
+							&& next_not( json, '{' )
+							&& next_not( json, '[' )
+							&& next_not( json, ',' )
 					  ) p_new_line();
+				} else if( *json == '"' ) {
 				} else {
 					p( *json );
 				}
@@ -76,7 +103,6 @@ static int beautify( struct beautify_arg * b, char * json, FILE * file, int (*fp
 		}
 		json++;
 	}
-	fprintf_func( file, "%.*s\n", i, buf );
 
 	return 0;
 
@@ -147,15 +173,15 @@ int main( int argc, char * * argv ) {
 	b.c = 0; //display colored output
 	b.c_p = 0; //punctuations colors
 	b.c_l = 88; //labels colors
-	b.c_t = 88; //text values colors
+	b.c_t = 196; //text values colors
 	b.c_b = 20; //boolean values colors
 	b.c_r = 34; //number values colors
 	b.c_n = 20; //null values colors
-	b.c_e = 196; //syntax errors colors
 	b.in_dd = 2; //indent for n spaces
 
 	b.indent = 0;
-	b.is_txt = 0;
+	b.t = PUNC;
+	b.is_val = 0;
 
 #undef p
 #define p( cc, some_var ) case cc: \
@@ -164,7 +190,7 @@ int main( int argc, char * * argv ) {
 	break
 
 	while( 1 ) {
-		op = getopt_long( argc, argv, "cp:l:t:b:r:n:e:i:f:", long_options, &option_index );
+		op = getopt_long( argc, argv, "cp:l:t:b:r:n:i:f:", long_options, &option_index );
 		if( op == -1 ) break;
 		check( op == 'c' || optarg, final_cleanup );
 		switch( op ) {
@@ -177,7 +203,6 @@ int main( int argc, char * * argv ) {
 				p( 'b', c_b );
 				p( 'r', c_r );
 				p( 'n', c_n );
-				p( 'e', c_e );
 			case 'i':
 				b.in_dd = atoi( optarg );
 				break;
@@ -190,9 +215,11 @@ int main( int argc, char * * argv ) {
 	if( optind < argc ) {
 		check_msg( optind == argc - 1, final_cleanup, "Too many command line arguments." );
 		json = argv[ optind ];
-		printf( "\n" );
-		rc = beautify( &b, json, stdout, fprintf );
+		if( b.c ) printf( "\033[0;38;5;%dm", b.c_p );
+		rc = beautify( &b, json, stdout, fputc, fprintf );
 		check( rc == 0, final_cleanup );
+		if( b.c ) printf( "\033[0m" );
+		printf( "\n" );
 	} else {
 		printf(
 				"We have no json to beautify :(.\n"
