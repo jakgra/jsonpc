@@ -63,7 +63,7 @@ static int beautify( struct beautify_arg * b, char * json, FILE * file, int (*fp
 					p( ' ' );
 					b->is_val = 1;
 				} else if( *json == '"' ) {
-					p_col_change( b->is_val ? b->c_l : b->c_t );
+					p_col_change( b->is_val ? b->c_t : b->c_l );
 					b->t = TXT;
 					p( *json );
 				} else if( ( isdigit( *json ) || *json == '.' || *json == '-' ) && b->t != NUM ) {
@@ -79,7 +79,11 @@ static int beautify( struct beautify_arg * b, char * json, FILE * file, int (*fp
 					p_col_change( b->c_n );
 					p( *json );
 				} else if( *json == ']' || *json == '[' || *json == '{' || *json == '}' || *json == ',' ) {
-					b->is_val = 0;
+					if( *json == '[' ) {
+						b->is_val = 1;
+					} else {
+						b->is_val = 0;
+					}
 					if( b->t != PUNC ) p_col_change( b->c_p );
 					if( *json == ']' || *json == '}' ) {
 						b->indent -= b->in_dd;
@@ -119,8 +123,8 @@ static int hex_to_term256( int * res, char * hex ) {
 	char hex_part[3];
 	int i;
 
-#define P_ERR_MSG "Wrong color value: \"%s\". Must be a '\\0' terminated hex color string."
 
+#define P_ERR_MSG "Wrong color value: \"%s\". Must be a '\\0' terminated hex color string."
 	check_msg_v( hex[0] == '#' && hex[7] == '\0', final_cleanup, P_ERR_MSG, hex );
 
 	end_ptr = NULL;
@@ -131,7 +135,8 @@ static int hex_to_term256( int * res, char * hex ) {
 		hex_part[0] = hex[ i * 2 + 1 ];
 		hex_part[1] = hex[ i * 2 + 2 ];
 		rgb[i] = strtol( hex_part, &end_ptr, 16 ) / 255.0f;
-		check_msg_v( errno == 0 && end_ptr == hex_part + 3, final_cleanup, P_ERR_MSG, hex );
+		debug_v( "hex_part + 3 was: %p and end_ptr was: %p and errno was %d", hex_part + 3, end_ptr, errno );
+		check_msg_v( errno == 0 && end_ptr == hex_part + 2, final_cleanup, P_ERR_MSG, hex );
 		check( rgb[i] <= 1.0f, final_cleanup );
 	}
 
@@ -172,11 +177,11 @@ int main( int argc, char * * argv ) {
 	// Options defaults:
 	b.c = 0; //display colored output
 	b.c_p = 0; //punctuations colors
-	b.c_l = 88; //labels colors
-	b.c_t = 196; //text values colors
-	b.c_b = 20; //boolean values colors
-	b.c_r = 34; //number values colors
-	b.c_n = 20; //null values colors
+	b.c_l = 1; //labels colors
+	b.c_t = 2; //text values colors
+	b.c_b = 3; //boolean values colors
+	b.c_r = 6; //number values colors
+	b.c_n = 4; //null values colors
 	b.in_dd = 2; //indent for n spaces
 
 	b.indent = 0;
