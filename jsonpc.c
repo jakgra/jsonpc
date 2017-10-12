@@ -166,9 +166,9 @@ int main( int argc, char * * argv ) {
 		{ "boolean-values-color", required_argument, 0, 'b' },
 		{ "number-values-color", required_argument, 0, 'r' },
 		{ "null-values-color", required_argument, 0, 'n' },
-		{ "syntax-errors-color", required_argument, 0, 'e' },
 		{ "indent", required_argument, 0, 'i' },
-		{ "config-file", required_argument, 0, 'f' }
+		{ "config-file", required_argument, 0, 'f' },
+		{ "help", no_argument, 0, 'h' }
 	};
 	int option_index = 0;
 	char * json;
@@ -195,10 +195,35 @@ int main( int argc, char * * argv ) {
 	break
 
 	while( 1 ) {
-		op = getopt_long( argc, argv, "cp:l:t:b:r:n:i:f:", long_options, &option_index );
+		op = getopt_long( argc, argv, "cp:l:t:b:r:n:i:f:h", long_options, &option_index );
 		if( op == -1 ) break;
-		check( op == 'c' || optarg, final_cleanup );
+		check( op == 'c' || op == 'h' || optarg, final_cleanup );
 		switch( op ) {
+			case 'h':
+				printf(
+						"Usage: jsonpc [OPTION]... [JSON]\n"
+						"Prettify && colorify json files/pipes.\n"
+						"All the arguments can be set to new defaults in the ~/.jsonpc file.\n"
+						"\n"
+						"Supported arguments (all color arguments should be of format -p '#ff0000':\n"
+						"  -c,  --colors                        colorize the output. By default it doesn't\n"
+						"  -p,  --punctuation-color=COLOR       the color for the {,[]} in the output,\n"
+						"                                       COLOR should be something like: '#ff0000'\n"
+						"  -l,  --labels-color=COLOR            the color for the json labels\n"
+						"  -t,  --text-values-color=COLOR       the color for the json text values\n"
+						"  -b,  --boolean-values-color=COLOR    the color for the json boolean values\n"
+						"  -r,  --number-values-color=COLOR     the color for the json numeric values\n"
+						"  -n,  --null-values-color=COLOR       the color for the json null values\n"
+						"  -i,  --indent=N                      indent for N spaces each time.\n"
+						"                                       Can be set to 0 to disable indentation. Default is 2\n"
+						"  -f,  --config-file=PATH              path from where to read the config file. Default is ~/.jsonpc\n"
+						"  -h,  --help                          show this message\n"
+						"\n"
+						"\n"
+						"Have fun :) and may the exit status always be 0\n"
+				      );
+				return 0;
+				break;
 			case 'c':
 				b.c = 1;
 				break;
